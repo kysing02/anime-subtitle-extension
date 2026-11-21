@@ -731,3 +731,48 @@ body.dsub-generic {
   font-size: 10px;
   color: #9ca3af;
 }
+
+.dsub-source-grip,
+#danime-sub-overlay .danime-sub-box {
+  touch-action: none;
+}
+
+/* Mobile & tablet touch ergonomics (iPadOS Orion / Android browsers) */
+@media (hover: none), (pointer: coarse) {
+  #danime-sub-fab {
+    opacity: 0.78;
+    padding: 9px 14px;
+    font-size: 13px;
+  }
+
+  .dsub-tab,
+  .dsub-btn,
+  .dsub-source-toggle {
+    min-height: 34px;
+  }
+}
+
+@media (max-width: 600px) {
+  #danime-sub-panel {
+    top: 56px;
+    right: 12px;
+    left: 12px;
+    width: auto;
+    max-width: calc(100vw - 24px);
+    max-height: calc(100dvh - 72px);
+  }
+
+  #danime-sub-fab.dsub-prime {
+    top: 56px;
+    left: 12px;
+    max-width: calc(100vw - 24px);
+  }
+
+  #danime-sub-panel.dsub-prime {
+    top: 102px;
+    left: 12px;
+    right: 12px;
+    width: auto;
+    max-height: calc(100dvh - 120px);
+  }
+}

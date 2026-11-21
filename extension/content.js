@@ -496,7 +496,7 @@
         <div class="dsub-section" id="dsub-tab-local">
           <div class="dsub-dropzone" id="dsub-dropzone">
             <span data-i18n-html="dropzoneHtml"></span>
-            <input type="file" id="dsub-file-input" accept=".srt,.ass,.ssa,.vtt" style="display: none;" />
+            <input type="file" id="dsub-file-input" accept=".srt,.ass,.ssa,.vtt,text/plain,text/vtt,*/*" style="display: none;" />
           </div>
           <div class="dsub-row" style="justify-content: space-between;">
             <span class="dsub-hint" data-i18n="dropzoneHint"></span>
@@ -762,38 +762,76 @@
     let startBottom = 10;
     let moved = false;
 
-    box.addEventListener('mousedown', (e) => {
-      if (e.button !== 0) return;
+    function beginDrag(clientY) {
       dragging = true;
       moved = false;
       suppressSubtitleClick = false;
-      startY = e.clientY;
+      startY = clientY;
       startBottom = state.settings.bottomPosition;
       box.style.cursor = 'grabbing';
-      e.preventDefault();
-    });
+    }
 
-    window.addEventListener('mousemove', (e) => {
-      if (!dragging) return;
-      const deltaY = startY - e.clientY;
-      if (Math.abs(deltaY) < 5 && !moved) return;
+    function moveDrag(clientY) {
+      if (!dragging) return false;
+      const deltaY = startY - clientY;
+      if (Math.abs(deltaY) < 5 && !moved) return false;
       moved = true;
       suppressSubtitleClick = true;
-      const deltaPct = (deltaY / window.innerHeight) * 100;
+      const deltaPct = (deltaY / Math.max(1, window.innerHeight)) * 100;
       const nextBottom = Math.min(90, Math.max(2, Math.round(startBottom + deltaPct)));
       saveSettings({ bottomPosition: nextBottom });
       const slider = panelEl?.querySelector('#dsub-set-bottom');
       const label = panelEl?.querySelector('#dsub-val-bottom');
       if (slider) slider.value = nextBottom;
       if (label) label.textContent = nextBottom;
+      return true;
+    }
+
+    function endDrag() {
+      if (!dragging) return;
+      dragging = false;
+      box.style.cursor = 'grab';
+      if (moved) {
+        setTimeout(() => {
+          suppressSubtitleClick = false;
+        }, 350);
+      }
+    }
+
+    box.addEventListener('mousedown', (e) => {
+      if (e.button !== 0) return;
+      beginDrag(e.clientY);
+      e.preventDefault();
     });
 
-    window.addEventListener('mouseup', () => {
-      if (dragging) {
-        dragging = false;
-        box.style.cursor = 'grab';
-      }
+    window.addEventListener('mousemove', (e) => {
+      moveDrag(e.clientY);
     });
+
+    window.addEventListener('mouseup', endDrag);
+
+    box.addEventListener(
+      'touchstart',
+      (e) => {
+        if (!e.touches || e.touches.length !== 1) return;
+        beginDrag(e.touches[0].clientY);
+      },
+      { passive: true }
+    );
+
+    window.addEventListener(
+      'touchmove',
+      (e) => {
+        if (!dragging || !e.touches || !e.touches.length) return;
+        if (moveDrag(e.touches[0].clientY)) {
+          e.preventDefault();
+        }
+      },
+      { passive: false }
+    );
+
+    window.addEventListener('touchend', endDrag, { passive: true });
+    window.addEventListener('touchcancel', endDrag, { passive: true });
   }
 
   function computeResponsiveFontSizePx() {
@@ -809,6 +847,90 @@
     return Math.max(12, Math.round(((baseHeight * scale) / 100) * 10) / 10);
   }
 
+  function isNativeVideoFullscreen(video) {
+    if (!video) return false;
+    const fsEl = document.fullscreenElement || document.webkitFullscreenElement || null;
+    return Boolean(
+      video.webkitDisplayingFullscreen ||
+        video.webkitPresentationMode === 'fullscreen' ||
+        fsEl === video
+    );
+  }
+
+  function ensureNativeVideoTrack(video) {
+    if (!video || typeof video.addTextTrack !== 'function') return null;
+    const existing = Array.from(video.textTracks || []).find((tr) => tr.__dsubNativeTrack);
+    if (existing) return existing;
+    try {
+      const track = video.addTextTrack('subtitles', 'Anime Subtitles', 'ja');
+      track.__dsubNativeTrack = true;
+      return track;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /**
+   * Sync loaded cues into a native HTMLVideoElement TextTrack (`VTTCue`) while
+   * the player is in iPadOS/WebKit or native `<video>` fullscreen, where HTML
+   * overlay elements are hidden behind the OS video layer.
+   */
+  function syncNativeVideoTrack() {
+    const video = currentVideo || getAdapter().getVideo();
+    if (!video) return;
+    const existing = Array.from(video.textTracks || []).find((tr) => tr.__dsubNativeTrack);
+    const nativeFs = isNativeVideoFullscreen(video);
+
+    if (!nativeFs || typeof VTTCue === 'undefined') {
+      if (existing) existing.mode = 'disabled';
+      return;
+    }
+
+    const track = existing || ensureNativeVideoTrack(video);
+    if (!track) return;
+
+    if (track.__dsubCuesRef !== state.cues || track.__dsubOffset !== state.offsetSec) {
+      Array.from(track.cues || []).forEach((c) => {
+        try {
+          track.removeCue(c);
+        } catch (_) {}
+      });
+      for (const cue of state.cues) {
+        const start = Math.max(0, Number(cue.start) + state.offsetSec);
+        const end = Math.max(start + 0.05, Number(cue.end) + state.offsetSec);
+        const text = String(cue.text || '').replace(/<[^>]*>/g, '');
+        if (text) {
+          try {
+            track.addCue(new VTTCue(start, end, text));
+          } catch (_) {}
+        }
+      }
+      track.__dsubCuesRef = state.cues;
+      track.__dsubOffset = state.offsetSec;
+    }
+
+    track.mode = state.enabled ? 'showing' : 'hidden';
+  }
+
+  function attachVideoListeners(video) {
+    if (!video || video.__dsubListenersBound) return;
+    video.__dsubListenersBound = true;
+    video.addEventListener('timeupdate', renderCurrentSubtitle);
+    video.addEventListener('seeked', renderCurrentSubtitle);
+    video.addEventListener('webkitbeginfullscreen', () => {
+      applyOverlayStyles();
+      syncNativeVideoTrack();
+    });
+    video.addEventListener('webkitendfullscreen', () => {
+      syncNativeVideoTrack();
+      applyOverlayStyles();
+    });
+    video.addEventListener('webkitpresentationmodechanged', () => {
+      syncNativeVideoTrack();
+      applyOverlayStyles();
+    });
+  }
+
   function applyOverlayStyles() {
     if (!overlayEl || !subBoxEl) return;
     overlayEl.style.bottom = `${state.settings.bottomPosition}%`;
@@ -822,6 +944,7 @@
       subBoxEl.style.backgroundColor = `rgba(0, 0, 0, ${op})`;
     }
     overlayEl.style.display = state.enabled ? 'block' : 'none';
+    syncNativeVideoTrack();
   }
 
   function syncSettingsToUI() {
@@ -887,6 +1010,7 @@
     }
     updateBadgeText();
     renderCurrentSubtitle();
+    syncNativeVideoTrack();
   }
 
   /**
@@ -1132,6 +1256,7 @@
       subBoxEl.textContent = '';
       toggleLyrics(false);
       updateBadgeText();
+      syncNativeVideoTrack();
     });
   }
 
@@ -1145,6 +1270,7 @@
     if (ruleEl) {
       ruleEl.textContent = state.offsetRuleLabel ? `[${state.offsetRuleLabel}]` : '';
     }
+    syncNativeVideoTrack();
   }
 
   function loadSubtitleFileObject(file) {
@@ -1444,6 +1570,7 @@
     const adapter = getAdapter();
     if (adapter.alwaysResolveVideo || !currentVideo || !document.body.contains(currentVideo)) {
       currentVideo = adapter.getVideo();
+      if (currentVideo) attachVideoListeners(currentVideo);
     }
     if (!currentVideo || state.cues.length === 0) {
       subBoxEl.textContent = '';
@@ -1505,26 +1632,36 @@
     });
   }
 
-  // Keep overlay visible even when video container enters Fullscreen, and recalculate responsive font size on resize
+  // Keep overlay visible even when video container enters Fullscreen, and fall back to TextTrack for native <video> fullscreen
   function setupFullscreenHandler() {
     window.addEventListener('resize', () => {
       applyOverlayStyles();
     });
 
-    document.addEventListener('fullscreenchange', () => {
-      const fsEl = document.fullscreenElement || document.body;
-      if (overlayEl && overlayEl.parentElement !== fsEl) {
-        fsEl.appendChild(overlayEl);
-      }
-      if (fabEl && fabEl.parentElement !== fsEl) {
-        fsEl.appendChild(fabEl);
-      }
-      if (panelEl && panelEl.parentElement !== fsEl) {
-        fsEl.appendChild(panelEl);
+    function handleFullscreenChange() {
+      const fsEl = document.fullscreenElement || document.webkitFullscreenElement || document.body;
+      const targetContainer = fsEl && fsEl.tagName !== 'VIDEO' ? fsEl : document.body;
+      if (targetContainer) {
+        if (overlayEl && overlayEl.parentElement !== targetContainer) {
+          targetContainer.appendChild(overlayEl);
+        }
+        if (fabEl && fabEl.parentElement !== targetContainer) {
+          targetContainer.appendChild(fabEl);
+        }
+        if (panelEl && panelEl.parentElement !== targetContainer) {
+          targetContainer.appendChild(panelEl);
+        }
       }
       applyOverlayStyles();
-      setTimeout(applyOverlayStyles, 150);
-    });
+      syncNativeVideoTrack();
+      setTimeout(() => {
+        applyOverlayStyles();
+        syncNativeVideoTrack();
+      }, 150);
+    }
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
   }
 
   // Listen for messages from extension popup
@@ -1628,8 +1765,7 @@
       const v = getAdapter().getVideo();
       if (v && v !== currentVideo) {
         currentVideo = v;
-        v.addEventListener('timeupdate', renderCurrentSubtitle);
-        v.addEventListener('seeked', renderCurrentSubtitle);
+        attachVideoListeners(v);
         detectWorkInfo();
       }
       renderCurrentSubtitle();

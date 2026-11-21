@@ -55,6 +55,11 @@
 3. 点击 **加载已解压的扩展程序**，选择解压后的文件夹（若使用 Git 克隆，则选择 [`extension/`](extension/) 目录）。
 4. *(启用自动检索)* 前往 [jimaku.cc/account](https://jimaku.cc/account) 免费申请 API Key，在扩展弹窗或播放器面板「⚙ 设置」中粘贴保存即可。
 
+### 移动端与平板支持（iPad Orion / Android）
+
+- **iPad（Orion Browser）**：从 **Releases** 下载 `.zip` 压缩包，在 Orion **设置 → 扩展 → 从文件安装** 中选择即可。在 d-anime Store 与 Prime Video 播放时请开启 **请求桌面网站**（进入 iPad 原生全屏时会自动通过 `TextTrack` 显示字幕，并支持触控拖动调节位置与排序）。
+- **Android（Firefox Android / Kiwi / Edge Canary 等）**：加载 **Releases** 中的 `.zip`（或解压后的 `extension/` 目录），并在 d-anime Store / Prime Video 页面开启 **桌面版网站** 以免被跳转到手机 App。
+
 ---
 
 ## 快捷键与常用操作

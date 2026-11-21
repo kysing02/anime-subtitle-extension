@@ -55,6 +55,11 @@
 3. Click **Load unpacked** and select the unzipped folder (or [`extension/`](extension/) if cloned).
 4. *(For auto-search)* Get a free API key at [jimaku.cc/account](https://jimaku.cc/account), open the extension popup (or **⚙ Settings** inside the `💬 Subtitles` panel), paste your key, and save.
 
+### Mobile & Tablet (iPad Orion / Android)
+
+- **iPad (Orion Browser)**: Download the `.zip` archive from **Releases** → open Orion **Settings → Extensions → Install from file** and pick the `.zip`. On d-anime Store or Prime Video, enable **Request Desktop Website** so playback stays in the browser; native iPad fullscreen automatically displays subtitles via `TextTrack` (`VTTCue`), and you can drag subtitles or source rows with touch.
+- **Android (Firefox Android / Kiwi / Edge Canary)**: Install the extension from the **Releases** `.zip` (or unpacked `extension/` folder) and enable **Desktop site** on d-anime Store / Prime Video to avoid mobile app redirects.
+
 ---
 
 ## Keyboard Shortcuts & Controls

@@ -55,6 +55,11 @@
 3. **「パッケージ化されていない拡張機能を読み込む」** から、解凍したフォルダ（Git 取得時は [`extension/`](extension/)）を選択します。
 4. *(自動検索を使う場合)* [jimaku.cc/account](https://jimaku.cc/account) で無料 API キーを取得し、拡張ポップアップまたはプレイヤー右上の「💬 字幕 → ⚙ 設定」に貼り付けて保存します。
 
+### モバイル・タブレット対応（iPad Orion / Android）
+
+- **iPad（Orion Browser）**: **Releases** から `.zip` をダウンロードし、Orion の **設定 → 機能拡張 → ファイルからインストール** で選択します。dアニメストア・Prime Video では **「デスクトップ用Webサイトを表示」** をオンにして再生してください（iPad のネイティブフルスクリーン時も `TextTrack` 経由で自動表示され、タッチでの位置調整・ソース並び替えにも対応しています）。
+- **Android（Firefox Android / Kiwi / Edge Canary など）**: **Releases** の `.zip`（または展開した `extension/`）を読み込み、dアニメストア・Prime Video で **「PC 版サイト」** を有効にしてご利用ください。
+
 ---
 
 ## ショートカット・操作方法

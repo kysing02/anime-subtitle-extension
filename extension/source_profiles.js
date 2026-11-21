@@ -234,6 +234,49 @@
 
       listEl.replaceChildren();
 
+      let touchDragFrom = null;
+      let touchDragOverEl = null;
+
+      function clearDragClasses() {
+        touchDragOverEl = null;
+        listEl.querySelectorAll('.dsub-source-row').forEach((el) => {
+          el.classList.remove('dragging', 'drag-over');
+        });
+      }
+
+      function reorderProfiles(from, to) {
+        if (
+          !Number.isInteger(from) ||
+          !Number.isInteger(to) ||
+          from === to ||
+          from < 0 ||
+          from >= profiles.length ||
+          to < 0 ||
+          to >= profiles.length
+        ) {
+          return;
+        }
+        const next = profiles.map((p) => ({ ...p }));
+        const [moved] = next.splice(from, 1);
+        next.splice(to, 0, moved);
+        commit(next);
+      }
+
+      function findRowAtPoint(pt) {
+        if (!pt) return null;
+        if (document.elementFromPoint) {
+          const el = document.elementFromPoint(pt.clientX, pt.clientY);
+          const hit = el && typeof el.closest === 'function' ? el.closest('.dsub-source-row') : null;
+          if (hit && listEl.contains(hit)) return hit;
+        }
+        return (
+          Array.from(listEl.querySelectorAll('.dsub-source-row')).find((candidate) => {
+            const r = candidate.getBoundingClientRect();
+            return r.height > 0 && pt.clientY >= r.top && pt.clientY <= r.bottom;
+          }) || null
+        );
+      }
+
       profiles.forEach((profile, idx) => {
         const row = document.createElement('div');
         row.className = `dsub-source-row${profile.locked ? ' is-other' : ''}`;
@@ -245,6 +288,57 @@
         const grip = document.createElement('span');
         grip.className = 'dsub-source-grip';
         grip.textContent = '⋮⋮';
+
+        // Touch drag-and-drop support for iPadOS (Orion/Safari) and Android browsers
+        grip.addEventListener(
+          'touchstart',
+          (e) => {
+            if (!e.touches || e.touches.length !== 1) return;
+            touchDragFrom = idx;
+            row.classList.add('dragging');
+          },
+          { passive: true }
+        );
+
+        grip.addEventListener(
+          'touchmove',
+          (e) => {
+            if (touchDragFrom === null || !e.touches || !e.touches.length) return;
+            e.preventDefault();
+            const hit = findRowAtPoint(e.touches[0]);
+            if (touchDragOverEl && touchDragOverEl !== hit) {
+              touchDragOverEl.classList.remove('drag-over');
+            }
+            if (hit && hit !== row) {
+              hit.classList.add('drag-over');
+              touchDragOverEl = hit;
+            } else {
+              touchDragOverEl = null;
+            }
+          },
+          { passive: false }
+        );
+
+        grip.addEventListener(
+          'touchend',
+          (e) => {
+            if (touchDragFrom === null) return;
+            const from = touchDragFrom;
+            const pt = e.changedTouches && e.changedTouches[0];
+            const targetRow = touchDragOverEl || findRowAtPoint(pt);
+            touchDragFrom = null;
+            clearDragClasses();
+            if (targetRow && targetRow.dataset && targetRow.dataset.index !== undefined) {
+              reorderProfiles(from, parseInt(targetRow.dataset.index, 10));
+            }
+          },
+          { passive: true }
+        );
+
+        grip.addEventListener('touchcancel', () => {
+          touchDragFrom = null;
+          clearDragClasses();
+        });
 
         const rank = document.createElement('span');
         rank.className = 'dsub-source-rank';
@@ -354,12 +448,7 @@
           row.classList.remove('drag-over');
           const fallbackFrom = e.dataTransfer ? parseInt(e.dataTransfer.getData('text/plain'), 10) : NaN;
           const from = dragIndex !== null ? dragIndex : fallbackFrom;
-          const to = idx;
-          if (!Number.isInteger(from) || from === to || from < 0 || from >= profiles.length) return;
-          const next = profiles.map((p) => ({ ...p }));
-          const [moved] = next.splice(from, 1);
-          next.splice(to, 0, moved);
-          commit(next);
+          reorderProfiles(from, idx);
         });
 
         row.addEventListener('dragend', () => {
