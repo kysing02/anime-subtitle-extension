@@ -1,0 +1,10 @@
+# Build & signing artifacts
+web-ext-artifacts/
+.amo-upload-uuid
+*.xpi
+*.zip
+
+# OS & Python cache
+.DS_Store
+__pycache__/
+*.pyc
